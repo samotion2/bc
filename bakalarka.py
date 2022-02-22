@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 from matplotlib.widgets import RadioButtons
+from matplotlib.widgets import CheckButtons
 from matplotlib.widgets import Button
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
@@ -19,20 +20,13 @@ global extent
 cbpresent = False
 cb = []
 
-def annot_format(sel, data, switch):
-    if switch == 1:
-        addition =  "\n" + "altitude: " + str(round(data['HMSL'][sel.index]/1000, 2))
-    elif switch == 2:
-        addition =  "\n" + "speed: " + str(round(data['GSPEED'][sel.index]*3.6/100, 2))
-    elif switch == 3:
-        addition =  "\n" + "crs: " + str(round(data['CRS'][sel.index]/100000, 2))
-    elif switch == 4:
-        addition =  "\n" + "accuracy: " + str(round(data['HACC'][sel.index], 2))
-    else:
-        addition = ""
-
+def annot_format(sel, data):
     return "x: " + str(data['LONGITUDE'][sel.index]/10000000) + "\n" + \
-    "y: " + str(data['LATITUDE'][sel.index]/10000000) + addition
+    "y: " + str(data['LATITUDE'][sel.index]/10000000) + "\n" + \
+    "altitude: " + str(round(data['HMSL'][sel.index]/1000, 2)) + "\n" + \
+    "speed: " + str(round(data['GSPEED'][sel.index]*3.6/100, 2)) + "\n" + \
+    "crs: " + str(round(data['CRS'][sel.index]/100000, 2)) + "\n" + \
+    "accuracy: " + str(round(data['HACC'][sel.index], 2))
 
 #17.0931,17.1057,48.1707,48.1824
 def crtscatter(arr, color, data, ax):
@@ -51,7 +45,7 @@ def hidecb():
         cbpresent = False
 
 
-def generateclick(ax, checkbox, labels, event):
+def generateclick(ax, radiobutton, labels, event):
     #vyber suboru
     tkinter.Tk().withdraw()
     filename = askopenfilename(title='Choose your file', filetypes=[("csvs", (".txt", ".log", "csv")), ("all", "*")])
@@ -60,10 +54,9 @@ def generateclick(ax, checkbox, labels, event):
         print('You have to choose a file first!')
         return
     
-    checkbox.set_active(0)
+    radiobutton.set_active(0)
     hidecb()
     ax.clear()
-    switch = [0]
     
     try:
         data = pd.read_csv(filename, names=['TIME','2','LATITUDE','4','LONGITUDE','6','HMSL','8','GSPEED','10','CRS','12', 'HACC'], sep=';')
@@ -83,9 +76,9 @@ def generateclick(ax, checkbox, labels, event):
     #print(p)
     p[0].set_visible(True)
 
-    mplcursors.cursor(ax, hover=2).connect("add", lambda sel: sel.annotation.set_text(annot_format(sel, data, switch[0]))) #tooltip
+    mplcursors.cursor(ax, hover=2).connect("add", lambda sel: sel.annotation.set_text(annot_format(sel, data))) #tooltip
 
-    checkbox.on_clicked(partial(radioclick, p, data, ax, switch, labels))
+    radiobutton.on_clicked(partial(radioclick, p, data, ax, labels))
 
     #nastavenie hranic tabulky
     ax.set_title(filename)
@@ -104,8 +97,7 @@ def generateclick(ax, checkbox, labels, event):
 
     plt.subplots_adjust(left=0.25, top= 0.95, bottom= 0.05)
 
-
-def radioclick(p, data, ax, switch, labels, label):
+def radioclick(p, data, ax, labels, label):
     global cbpresent
     global cb
 
@@ -116,7 +108,6 @@ def radioclick(p, data, ax, switch, labels, label):
 
     i = labels.index(label)
     p[i].set_visible(True)
-    switch[0] = i
 
     # if i > 0:
     #     cb.remove()
@@ -187,13 +178,16 @@ def main():
 
     #radiobuttons
     labels = ['GPS', 'Altitude', 'Speed', 'Course', 'HACC']
-    axCheckButton = plt.axes([0.01,0.5,0.15,0.15]) 
-    checkbox = RadioButtons(axCheckButton, labels)
+    axRadioButton = plt.axes([0.01,0.5,0.15,0.15]) 
+    radiobutton = RadioButtons(axRadioButton, labels)
+
+    axCheckButton = plt.axes([0.01,0.2,0.15,0.2]) 
+    checkbox = CheckButtons(axCheckButton, labels)
 
     axButton = plt.axes([0.01,0.7,0.10,0.08]) 
     button = Button(axButton, "Generate")
 
-    button.on_clicked(partial(generateclick, ax, checkbox, labels))
+    button.on_clicked(partial(generateclick, ax, radiobutton, labels))
     
     plt.subplots_adjust(left=0.3)
     plt.show()
