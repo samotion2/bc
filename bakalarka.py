@@ -6,7 +6,7 @@ from matplotlib.widgets import RadioButtons
 from matplotlib.widgets import CheckButtons
 from matplotlib.widgets import Button
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-
+import matplotlib.gridspec as gridspec
 import tkinter
 from tkinter.filedialog import askopenfilename
 
@@ -16,6 +16,7 @@ tilemapbase.start_logging()
 from functools import partial
 
 global extent
+cursors = []
 
 cbpresent = False
 cb = []
@@ -29,11 +30,11 @@ def annot_format(sel, data):
     "accuracy: " + str(round(data['HACC'][sel.index], 2))
 
 #17.0931,17.1057,48.1707,48.1824
-def crtscatter(arr, color, data, ax):
+def crtscatter(arr, color, data, ax, counter):
     points = [tilemapbase.project(x,y) for x,y in zip(data['LONGITUDE']/10000000, data['LATITUDE']/10000000)]
     x, y = zip(*points)
 
-    sct = ax.scatter(x, y, zorder=1, alpha= 0.2, c=color, cmap=mpl.cm.rainbow, s=30, visible=False)
+    sct = ax[counter].scatter(x, y, zorder=1, alpha= 0.2, c=color, cmap=mpl.cm.rainbow, s=30, visible=True)
     arr.append(sct)
 
 def hidecb():
@@ -43,7 +44,6 @@ def hidecb():
     if cbpresent == True:
         cb.remove()
         cbpresent = False
-
 
 def generateclick(ax, radiobutton, labels, event):
     #vyber suboru
@@ -56,7 +56,6 @@ def generateclick(ax, radiobutton, labels, event):
     
     radiobutton.set_active(0)
     hidecb()
-    ax.clear()
     
     try:
         data = pd.read_csv(filename, names=['TIME','2','LATITUDE','4','LONGITUDE','6','HMSL','8','GSPEED','10','CRS','12', 'HACC'], sep=';')
@@ -70,47 +69,46 @@ def generateclick(ax, radiobutton, labels, event):
     color = ['Blue', data['HMSL'], data['GSPEED'], data['CRS'], data['HACC']]
 
     p = []
+    counter = 0
     for i in color:
-        crtscatter(p, i, data, ax)
+        crtscatter(p, i, data, ax, counter)
+        counter += 1
 
-    #print(p)
-    p[0].set_visible(True)
-
-    mplcursors.cursor(ax, hover=2).connect("add", lambda sel: sel.annotation.set_text(annot_format(sel, data))) #tooltip
+    global cursors
 
     radiobutton.on_clicked(partial(radioclick, p, data, ax, labels))
 
-    #nastavenie hranic tabulky
-    ax.set_title(filename)
-    ax.set_xlim(x1, x2)
-    ax.set_ylim(y1, y2)
+    #nastavenie hranic tabulky, formatovanie osi tabulky
+    for i in range(len(p)):
+        cursors.append(mplcursors.cursor(ax[i], hover=2).connect("add", lambda sel: sel.annotation.set_text(annot_format(sel, data)))) #tooltip
 
-    #formatovanie osi tabulky
-    ax.yaxis.set_major_formatter(mpl.ticker.StrMethodFormatter('{x:,.4f}'))
-    ax.xaxis.set_major_formatter(mpl.ticker.StrMethodFormatter('{x:,.4f}'))
+        ax[i].set_title(labels[i])
+        ax[i].set_xlim(x1, x2)
+        ax[i].set_ylim(y1, y2)
+
+        ax[i].yaxis.set_major_formatter(mpl.ticker.StrMethodFormatter('{x:,.4f}'))
+        ax[i].xaxis.set_major_formatter(mpl.ticker.StrMethodFormatter('{x:,.4f}'))
+        ax[i].label_outer()
 
     extent = tilemapbase.Extent.from_lonlat(x1,x2,y1,y2)     #tu 4 veci <-----------------------------------------------
     t = tilemapbase.tiles.build_OSM()
 
     plotter = tilemapbase.Plotter(extent, t, width=200)
-    plotter.plot(ax)
-
+    for i in range(5):
+        plotter.plot(ax[i])
+    
     plt.subplots_adjust(left=0.25, top= 0.95, bottom= 0.05)
+    plt.draw()
 
 def radioclick(p, data, ax, labels, label):
     global cbpresent
     global cb
 
-    #print(label)
-    #a.set_visible(not a.get_visible())
     for i in p:
         i.set_visible(False)
 
     i = labels.index(label)
     p[i].set_visible(True)
-
-    # if i > 0:
-    #     cb.remove()
 
     hidecb()
 
@@ -141,7 +139,28 @@ def radioclick(p, data, ax, labels, label):
 
     plt.draw()
 
-#print(cbpresent)
+def checkclick(labels, ax, fig, checkbox_status, label):
+    i = labels.index(label)
+    counter = 0
+    #cursors[i].hover = False
+
+    if ax[i].get_visible():
+        ax[i].set_visible(False)
+        checkbox_status[i] = 0
+    else:
+        ax[i].set_visible(True)
+        checkbox_status[i] = 1
+
+    if checkbox_status.count(1) > 0:
+        gs = gridspec.GridSpec(1, checkbox_status.count(1), height_ratios=[5])
+
+    for j in range(len(checkbox_status)):
+        if checkbox_status[j] == 1:
+            ax[j].set_position(gs[counter].get_position(fig))
+            counter += 1
+
+    plt.draw()
+
 #inicializacia dat
 def bbset(data):
     #zistenie min a max hodnot lat,long hodnot z dat
@@ -153,10 +172,7 @@ def bbset(data):
 
 def init(i):
     if i==1:
-        #data_path = '\\averaged.txt'
         data_path = 'C:\\Users\\PC\\Desktop\\averaged.txt'
-        #data_path = '.\\sobota_log\\dole\\2021-04-10_08-52-05_gps.log'
-        #data_path = '.\\nedela_log\\dole\\2021-04-11_13-36-28_gps.log'
         img_path = 'koliba.png'
         x1 = 17.0931
         x2 = 17.1057
@@ -164,7 +180,6 @@ def init(i):
         y2 = 48.1824
     else:
         data_path = '2021-04-21_06-12-07_gps.log'
-        #data_path = '2021-04-21_14-42-20_gps.log'
         img_path = 'zilina.png'
         x1 = 18.7295
         x2 = 18.7677
@@ -174,19 +189,23 @@ def init(i):
     return data_path, x1, x2, y1, y2, img_path
 
 def main():
-    fig, ax = plt.subplots(figsize = (11,7))
+    fig, ax = plt.subplots(1,5)
+
+    fig.set_figheight(7)
+    fig.set_figwidth(11)
 
     #radiobuttons
     labels = ['GPS', 'Altitude', 'Speed', 'Course', 'HACC']
     axRadioButton = plt.axes([0.01,0.5,0.15,0.15]) 
     radiobutton = RadioButtons(axRadioButton, labels)
 
+    checkbox_status = [1,1,1,1,1]
     axCheckButton = plt.axes([0.01,0.2,0.15,0.2]) 
-    checkbox = CheckButtons(axCheckButton, labels)
+    checkbox = CheckButtons(ax=axCheckButton, labels=labels, actives=checkbox_status)
+    checkbox.on_clicked(partial(checkclick, labels, ax, fig, checkbox_status))
 
     axButton = plt.axes([0.01,0.7,0.10,0.08]) 
     button = Button(axButton, "Generate")
-
     button.on_clicked(partial(generateclick, ax, radiobutton, labels))
     
     plt.subplots_adjust(left=0.3)
