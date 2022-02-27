@@ -8,7 +8,7 @@ from matplotlib.widgets import Button
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import matplotlib.gridspec as gridspec
 import tkinter
-from tkinter.filedialog import askopenfilename
+from tkinter.filedialog import askopenfilename, askopenfilenames
 
 import mplcursors
 import tilemapbase
@@ -16,10 +16,87 @@ tilemapbase.start_logging()
 from functools import partial
 
 global extent
-cursors = []
 
 cbpresent = False
 cb = []
+
+class Record:
+    def __init__(self, time, lat, lon, hmsl, gspeed, crs, hacc):
+        self.time = time
+        self.lat = lat
+        self.lon = lon
+        self.hmsl = hmsl
+        self.gspeed = gspeed
+        self.crs = crs
+        self.hacc = hacc
+
+    def __str__(self):
+        return str(self.time) + ';LAT;' + str(self.lat) + ';LON;' + str(self.lon) + ';HMSL;' + str(self.hmsl) + ";GSPEED;" + str(self.gspeed) + ';CRS;' + str(self.crs) + ';HACC;' + str(self.hacc) + '\n'
+
+class Average:
+    def load_data(self, accuracy):
+        #data_path = askopenfilenames(title='Choose your file', filetypes=[("csvs", (".txt", ".log", "csv")), ("all", "*")])
+        data_path = ['C:\\Users\\PC\\Desktop\\sobota_log\\dole\\2021-04-10_08-52-05_gps.log', 'C:\\Users\\PC\\Desktop\\sobota_log\\dole\\2021-04-10_09-22-05_gps.log', 'C:\\Users\\PC\\Desktop\\sobota_log\\dole\\2021-04-10_15-06-16_gps.log']
+        data = []
+        for i in range(len(data_path)):
+            data.append(pd.read_csv(data_path[i], names=['TIME','2','LATITUDE','4','LONGITUDE','6','HMSL','8','GSPEED','10','CRS','12', 'HACC'], sep=';'))
+
+        longdif = round(data[0]['LONGITUDE'].max()/accuracy)-round(data[0]['LONGITUDE'].min()/accuracy)
+        latdif = round(data[0]['LATITUDE'].max()/accuracy)-round(data[0]['LATITUDE'].min()/accuracy)
+
+        longmin = data[0]['LONGITUDE'].min()
+        latmin = data[0]['LATITUDE'].min()
+
+        arr = [[[] for x in range(longdif) ] for j in range(latdif)]
+
+        for data in data:
+            for i in range(len(data)):
+                y = round(data['LONGITUDE'][i]/accuracy-longmin/accuracy)
+                x = round(data['LATITUDE'][i]/accuracy-latmin/accuracy)
+                
+                r = Record(data['TIME'][i], data['LATITUDE'][i], data['LONGITUDE'][i], data['HMSL'][i], data['GSPEED'][i], data['CRS'][i], data['HACC'][i])
+                try:
+                    arr[x-1][y-1].append(r)
+                except:
+                    pass
+        self.arr = arr
+    
+    def aver(self, rec):
+        time = 'avg'
+        lat = lon = hmsl = gspeed = crs = hacc = 0
+        arr_len = len(rec)
+        
+        for i in range(arr_len):
+            lat += rec[i].lat
+            lon += rec[i].lon
+            hmsl += rec[i].hmsl
+            gspeed += rec[i].gspeed
+            crs += rec[i].crs
+            hacc += rec[i].hacc
+
+        lat //= arr_len
+        lon //= arr_len
+        hmsl //= arr_len
+        gspeed //= arr_len
+        crs //= arr_len
+        hacc //= arr_len
+
+        lat, lon, hmsl, gspeed, crs, hacc = (x//arr_len for x in [lat, lon, hmsl, gspeed, crs, hacc])
+
+        return Record(time, lat, lon, hmsl, gspeed, crs, hacc)
+
+    def write_data(self):
+        arr = self.arr
+
+        f = open("C:\\Users\\PC\\Desktop\\averaged.txt", "w")
+
+        for i in range(len(arr)):
+            for y in range(len(arr[i])):
+                if len(arr[i][y]) != 0:
+                    record = self.aver(arr[i][y])
+                    f.write(str(record))
+
+        f.close()
 
 def annot_format(sel, data):
     return "x: " + str(data['LONGITUDE'][sel.index]/10000000) + "\n" + \
@@ -45,7 +122,7 @@ def hidecb():
         cb.remove()
         cbpresent = False
 
-def generateclick(ax, radiobutton, labels, event):
+def generate_click(ax, radiobutton, labels, event):
     #vyber suboru
     tkinter.Tk().withdraw()
     filename = askopenfilename(title='Choose your file', filetypes=[("csvs", (".txt", ".log", "csv")), ("all", "*")])
@@ -59,6 +136,8 @@ def generateclick(ax, radiobutton, labels, event):
     
     try:
         data = pd.read_csv(filename, names=['TIME','2','LATITUDE','4','LONGITUDE','6','HMSL','8','GSPEED','10','CRS','12', 'HACC'], sep=';')
+        # data = data.sample(len(data)//10) #zmensenie vzdorky
+        # data.reset_index(drop=True, inplace=True) #reindexovanie aby fungoval index anotacii
     except:
         print('zly file')
         return
@@ -74,14 +153,12 @@ def generateclick(ax, radiobutton, labels, event):
         crtscatter(p, i, data, ax, counter)
         counter += 1
 
-    global cursors
+    radiobutton.on_clicked(partial(radio_click, p, data, ax, labels))
 
-    radiobutton.on_clicked(partial(radioclick, p, data, ax, labels))
-
+    mplcursors.cursor(ax, hover=False, highlight=2).connect("add", lambda sel: sel.annotation.set_text(annot_format(sel, data))) #tooltip
+    
     #nastavenie hranic tabulky, formatovanie osi tabulky
     for i in range(len(p)):
-        cursors.append(mplcursors.cursor(ax[i], hover=2).connect("add", lambda sel: sel.annotation.set_text(annot_format(sel, data)))) #tooltip
-
         ax[i].set_title(labels[i])
         ax[i].set_xlim(x1, x2)
         ax[i].set_ylim(y1, y2)
@@ -92,15 +169,15 @@ def generateclick(ax, radiobutton, labels, event):
 
     extent = tilemapbase.Extent.from_lonlat(x1,x2,y1,y2)     #tu 4 veci <-----------------------------------------------
     t = tilemapbase.tiles.build_OSM()
-
-    plotter = tilemapbase.Plotter(extent, t, width=200)
+    
+    plotter = tilemapbase.Plotter(extent, t, width=50)
     for i in range(5):
         plotter.plot(ax[i])
-    
+
     plt.subplots_adjust(left=0.25, top= 0.95, bottom= 0.05)
     plt.draw()
 
-def radioclick(p, data, ax, labels, label):
+def radio_click(p, data, ax, labels, label):
     global cbpresent
     global cb
 
@@ -139,10 +216,9 @@ def radioclick(p, data, ax, labels, label):
 
     plt.draw()
 
-def checkclick(labels, ax, fig, checkbox_status, label):
+def check_click(labels, ax, fig, checkbox_status, label):
     i = labels.index(label)
     counter = 0
-    #cursors[i].hover = False
 
     if ax[i].get_visible():
         ax[i].set_visible(False)
@@ -158,8 +234,17 @@ def checkclick(labels, ax, fig, checkbox_status, label):
         if checkbox_status[j] == 1:
             ax[j].set_position(gs[counter].get_position(fig))
             counter += 1
+        else:
+            if checkbox_status.count(1) > 0:
+                ax[j].set_position(gs[0].get_position(fig))
 
     plt.draw()
+
+def average_click(event):
+    average = Average()
+    average.load_data(300)
+    average.write_data()
+    print("averaged")
 
 #inicializacia dat
 def bbset(data):
@@ -202,11 +287,15 @@ def main():
     checkbox_status = [1,1,1,1,1]
     axCheckButton = plt.axes([0.01,0.2,0.15,0.2]) 
     checkbox = CheckButtons(ax=axCheckButton, labels=labels, actives=checkbox_status)
-    checkbox.on_clicked(partial(checkclick, labels, ax, fig, checkbox_status))
+    checkbox.on_clicked(partial(check_click, labels, ax, fig, checkbox_status))
 
-    axButton = plt.axes([0.01,0.7,0.10,0.08]) 
-    button = Button(axButton, "Generate")
-    button.on_clicked(partial(generateclick, ax, radiobutton, labels))
+    axButton1 = plt.axes([0.01,0.7,0.10,0.08]) 
+    button1 = Button(axButton1, "Generate")
+    button1.on_clicked(partial(generate_click, ax, radiobutton, labels))
+
+    axButton2 = plt.axes([0.12,0.7,0.10,0.08]) 
+    button2 = Button(axButton2, "Average")
+    button2.on_clicked(average_click)
     
     plt.subplots_adjust(left=0.3)
     plt.show()
