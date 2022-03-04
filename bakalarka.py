@@ -5,6 +5,8 @@ import matplotlib as mpl
 from matplotlib.widgets import RadioButtons
 from matplotlib.widgets import CheckButtons
 from matplotlib.widgets import Button
+from matplotlib.widgets import Cursor
+from matplotlib.offsetbox import TextArea, AnnotationBbox
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import matplotlib.gridspec as gridspec
 import tkinter
@@ -16,6 +18,7 @@ tilemapbase.start_logging()
 from functools import partial
 
 global extent
+global data1
 
 cbpresent = False
 cb = []
@@ -111,7 +114,7 @@ def crtscatter(arr, color, data, ax, counter):
     points = [tilemapbase.project(x,y) for x,y in zip(data['LONGITUDE']/10000000, data['LATITUDE']/10000000)]
     x, y = zip(*points)
 
-    sct = ax[counter].scatter(x, y, zorder=1, alpha= 0.2, c=color, cmap=mpl.cm.rainbow, s=30, visible=True)
+    sct = ax[counter].scatter(x, y, zorder=1, alpha= 0.2, c=color, cmap=mpl.cm.rainbow, s=30, visible=True, picker=True)
     arr.append(sct)
 
 def hidecb():
@@ -122,7 +125,7 @@ def hidecb():
         cb.remove()
         cbpresent = False
 
-def generate_click(ax, radiobutton, labels, event):
+def generate_click(ax, radiobutton, labels, fig, event):
     #vyber suboru
     tkinter.Tk().withdraw()
     filename = askopenfilename(title='Choose your file', filetypes=[("csvs", (".txt", ".log", "csv")), ("all", "*")])
@@ -138,6 +141,8 @@ def generate_click(ax, radiobutton, labels, event):
         data = pd.read_csv(filename, names=['TIME','2','LATITUDE','4','LONGITUDE','6','HMSL','8','GSPEED','10','CRS','12', 'HACC'], sep=';')
         # data = data.sample(len(data)//10) #zmensenie vzdorky
         # data.reset_index(drop=True, inplace=True) #reindexovanie aby fungoval index anotacii
+        global data1
+        data1=data
     except:
         print('zly file')
         return
@@ -155,7 +160,8 @@ def generate_click(ax, radiobutton, labels, event):
 
     radiobutton.on_clicked(partial(radio_click, p, data, ax, labels))
 
-    mplcursors.cursor(ax, hover=False, highlight=2).connect("add", lambda sel: sel.annotation.set_text(annot_format(sel, data))) #tooltip
+    #mplcursors.cursor(ax, hover=True, highlight=0).connect("add", lambda sel: sel.annotation.set_text(annot_format(sel, data))) #tooltip
+    #mplcursors.cursor(ax, hover=False, highlight=0).connect("add", lambda sel: fig.canvas.toolbar.set_message(annot_format(sel, data))) #tooltip
     
     #nastavenie hranic tabulky, formatovanie osi tabulky
     for i in range(len(p)):
@@ -255,23 +261,22 @@ def bbset(data):
     bbox = (data['LONGITUDE'].min()/10000000, data['LONGITUDE'].max()/10000000, data['LATITUDE'].min()/10000000, data['LATITUDE'].max()/10000000)
     return bbox[0] - shiftx, bbox[1] + shiftx, bbox[2] - shifty, bbox[3] + shifty
 
-def init(i):
-    if i==1:
-        data_path = 'C:\\Users\\PC\\Desktop\\averaged.txt'
-        img_path = 'koliba.png'
-        x1 = 17.0931
-        x2 = 17.1057
-        y1 = 48.1707
-        y2 = 48.1824
-    else:
-        data_path = '2021-04-21_06-12-07_gps.log'
-        img_path = 'zilina.png'
-        x1 = 18.7295
-        x2 = 18.7677
-        y1 = 49.1976
-        y2 = 49.2599
-
-    return data_path, x1, x2, y1, y2, img_path
+def test(fig, event):
+    i = event.ind[0]
+    data = event.artist.get_offsets()
+    xdata, ydata = data[i,:]
+    print ("x: " + str(data1['LONGITUDE'][i]/10000000) + "\n" + \
+    "y: " + str(data1['LATITUDE'][i]/10000000) + "\n" + \
+    "altitude: " + str(round(data1['HMSL'][i]/1000, 2)) + "\n" + \
+    "speed: " + str(round(data1['GSPEED'][i]*3.6/100, 2)) + "\n" + \
+    "crs: " + str(round(data1['CRS'][i]/100000, 2)) + "\n" + \
+    "accuracy: " + str(round(data1['HACC'][i], 2)))
+    # fig.canvas.toolbar.set_message("x: " + str(data1['LONGITUDE'][i]/10000000) + "\n" + \
+    # "y: " + str(data1['LATITUDE'][i]/10000000) + "\n" + \
+    # "altitude: " + str(round(data1['HMSL'][i]/1000, 2)) + "\n" + \
+    # "speed: " + str(round(data1['GSPEED'][i]*3.6/100, 2)) + "\n" + \
+    # "crs: " + str(round(data1['CRS'][i]/100000, 2)) + "\n" + \
+    # "accuracy: " + str(round(data1['HACC'][i], 2)))
 
 def main():
     fig, ax = plt.subplots(1,5)
@@ -279,10 +284,16 @@ def main():
     fig.set_figheight(7)
     fig.set_figwidth(11)
 
+    #fig.canvas.mpl_connect("motion_notify_event", lambda event: fig.canvas.toolbar.set_message(""))
+    # cursor1 = Cursor(ax[0], horizOn=True, vertOn=True, useblit=False, color='r', linewidth=1)
+    # cursor2 = Cursor(ax[1], horizOn=True, vertOn=True, useblit=True, color='r', linewidth=1)
+    fig.canvas.mpl_connect('pick_event', partial(test, fig))
     #radiobuttons
     labels = ['GPS', 'Altitude', 'Speed', 'Course', 'HACC']
     axRadioButton = plt.axes([0.01,0.5,0.15,0.15]) 
     radiobutton = RadioButtons(axRadioButton, labels)
+
+    fig.text(1, 1, 'textbox', fontsize=10)
 
     checkbox_status = [1,1,1,1,1]
     axCheckButton = plt.axes([0.01,0.2,0.15,0.2]) 
@@ -291,7 +302,7 @@ def main():
 
     axButton1 = plt.axes([0.01,0.7,0.10,0.08]) 
     button1 = Button(axButton1, "Generate")
-    button1.on_clicked(partial(generate_click, ax, radiobutton, labels))
+    button1.on_clicked(partial(generate_click, ax, radiobutton, labels, fig))
 
     axButton2 = plt.axes([0.12,0.7,0.10,0.08]) 
     button2 = Button(axButton2, "Average")
