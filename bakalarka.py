@@ -107,7 +107,7 @@ class Window:
     def __init__(self, files):
         self.fig, self.ax = plt.subplots(len(files),5)
         fig, ax = self.fig, self.ax
-        self.data = files[0]
+        self.data = files
 
         fig.set_figheight(7)
         fig.set_figwidth(11)
@@ -176,97 +176,128 @@ class Window:
         
         # figg = px.scatter_mapbox(data, lon=data['LONGITUDE']/10000000, lat=data['LATITUDE']/10000000, color="GSPEED", title="A Plotly Express Figure")
         # figg.update_layout(mapbox_style="open-street-map")
+        tmp = self.bbset()
+        x1 = []
+        x2 = []
+        y1 = []
+        y2 = []
 
-        x1, x2, y1, y2 = self.bbset()
-
+        for i in range(len(tmp)):
+            x1.append(tmp[i][0])
+            x2.append(tmp[i][1])
+            y1.append(tmp[i][2])
+            y2.append(tmp[i][3])
+        #print(x1)
+        
         #nastavenie colormapy
-        color = ['Blue', data['HMSL'], data['GSPEED'], data['CRS'], data['HACC']]
+        color = []
+        for i in range(len(data)):
+            color.append(('Blue', data[i]['HMSL'], data[i]['GSPEED'], data[i]['CRS'], data[i]['HACC']))
 
-        p = []
+        p = [[0 for x in range(5)] for y in range(len(data))] 
         counter = 0
-        for i in color:
-            self.crtscatter(p, i, counter)
-            counter += 1
+        
+        for i in range(len(color)):
+            for clr in color[i]:
+                #print(i)
+                self.crtscatter(p[i], clr, i, counter)
+                counter += 1
+            counter = 0
 
         #self.radiobutton.on_clicked(partial(radio_click, p, data, ax, labels))
-        
         #nastavenie hranic tabulky, formatovanie osi tabulky
-        # for i in range(len(p)):
-        #     ax[i].set_title(labels[i])
-        #     ax[i].set_xlim(x1, x2)
-        #     ax[i].set_ylim(y1, y2)
+        for y in range(len(data)):
+            for i in range(len(p[0])):
+                ax[y][i].set_title(labels[i])
+                ax[y][i].set_xlim(x1[y], x2[y])
+                ax[y][i].set_ylim(y1[y], y2[y])
 
-        #     ax[i].yaxis.set_major_formatter(mpl.ticker.StrMethodFormatter('{x:,.4f}'))
-        #     ax[i].xaxis.set_major_formatter(mpl.ticker.StrMethodFormatter('{x:,.4f}'))
-        #     ax[i].label_outer()
-
-        extent = tilemapbase.Extent.from_lonlat(x1,x2,y1,y2)
-        t = tilemapbase.tiles.build_OSM()
+                ax[y][i].yaxis.set_major_formatter(mpl.ticker.StrMethodFormatter('{x:,.4f}'))
+                ax[y][i].xaxis.set_major_formatter(mpl.ticker.StrMethodFormatter('{x:,.4f}'))
+                ax[y][i].label_outer()
         
-        plotter = tilemapbase.Plotter(extent, t, width=50)
-        for i in range(5):
-            plotter.plot(ax[i])
-            #plotter.plot(ax[1][i])
+        plotter = []
+        for i in range(len(data)):
+            extent = tilemapbase.Extent.from_lonlat(x1[i],x2[i],y1[i],y2[i])
+            t = tilemapbase.tiles.build_OSM()
+            plotter.append(tilemapbase.Plotter(extent, t, width=50))
+        
+        for y in range(len(data)):
+            for i in range(5):
+                plotter[y].plot(ax[y][i])
+                #plotter.plot(ax[1][i])
 
         plt.subplots_adjust(left=0.25, top= 0.95, bottom= 0.05)
         plt.draw()
 
     def map_click(self, event):
         i = event.ind[0]
-        data = event.artist.get_offsets()
-        xdata, ydata = data[i,:]
+        pnts = event.artist.get_offsets()
+        xdata, ydata = pnts[0,:]
         
-        data1=self.data
-        print(self.annot_format(i))
-        self.fig.canvas.toolbar.set_message(self.annot_format(i))
+        for z in range(len(self.data)):
+            points = [tilemapbase.project(x,y) for x,y in zip(self.data[z]['LONGITUDE']/10000000, self.data[z]['LATITUDE']/10000000)]
+            x, y = zip(*points)
 
-    def annot_format(self, i):
-        return ("x: " + str(self.data['LONGITUDE'][i]/10000000) + "\n" + \
-        "y: " + str(self.data['LATITUDE'][i]/10000000) + "\n" + \
-        "altitude: " + str(round(self.data['HMSL'][i]/1000, 2)) + "\n" + \
-        "speed: " + str(round(self.data['GSPEED'][i]*3.6/100, 2)) + "\n" + \
-        "crs: " + str(round(self.data['CRS'][i]/100000, 2)) + "\n" + \
-        "accuracy: " + str(round(self.data['HACC'][i], 2)))
+            if x[0] == xdata and y[0] ==ydata:
+                print(x[0], xdata, y[0], ydata)
+                break
+
+        print(self.annot_format(i, z))
+        self.fig.canvas.toolbar.set_message(self.annot_format(i, z)) #------------------------------------TU ZMENIT
+
+    def annot_format(self, i, y):
+        return ("x: " + str(self.data[y]['LONGITUDE'][i]/10000000) + "\n" + \
+        "y: " + str(self.data[y]['LATITUDE'][i]/10000000) + "\n" + \
+        "altitude: " + str(round(self.data[y]['HMSL'][i]/1000, 2)) + "\n" + \
+        "speed: " + str(round(self.data[y]['GSPEED'][i]*3.6/100, 2)) + "\n" + \
+        "crs: " + str(round(self.data[y]['CRS'][i]/100000, 2)) + "\n" + \
+        "accuracy: " + str(round(self.data[y]['HACC'][i], 2)))
 
     def bbset(self):
         data = self.data
         #zistenie min a max hodnot lat,long hodnot z dat
-        shiftx = (data['LONGITUDE'].max() - data['LONGITUDE'].min())/100000000
-        shifty = (data['LATITUDE'].max() - data['LATITUDE'].min())/300000000
+        bb = []
+        for i in range(len(data)):
+            shiftx = (data[i]['LONGITUDE'].max() - data[i]['LONGITUDE'].min())/100000000
+            shifty = (data[i]['LATITUDE'].max() - data[i]['LATITUDE'].min())/300000000
 
-        bbox = (data['LONGITUDE'].min()/10000000, data['LONGITUDE'].max()/10000000, data['LATITUDE'].min()/10000000, data['LATITUDE'].max()/10000000)
-        return bbox[0] - shiftx, bbox[1] + shiftx, bbox[2] - shifty, bbox[3] + shifty
+            bbox = (data[i]['LONGITUDE'].min()/10000000, data[i]['LONGITUDE'].max()/10000000, data[i]['LATITUDE'].min()/10000000, data[i]['LATITUDE'].max()/10000000)
+            bb.append((bbox[0] - shiftx, bbox[1] + shiftx, bbox[2] - shifty, bbox[3] + shifty))
+        return bb
 
-    def crtscatter(self, arr, color, counter):
-        points = [tilemapbase.project(x,y) for x,y in zip(self.data['LONGITUDE']/10000000, self.data['LATITUDE']/10000000)]
+    def crtscatter(self, arr, color, i, counter):
+        points = [tilemapbase.project(x,y) for x,y in zip(self.data[i]['LONGITUDE']/10000000, self.data[i]['LATITUDE']/10000000)]
         x, y = zip(*points)
 
-        sct = self.ax[counter].scatter(x, y, zorder=1, alpha= 0.2, c=color, cmap=mpl.cm.rainbow, s=30, visible=True, picker=True)
-        #sct1 = self.ax[1][counter].scatter(x, y, zorder=1, alpha= 0.2, c=color, cmap=mpl.cm.rainbow, s=30, visible=True, picker=True)
-        arr.append(sct)
+        sct = self.ax[i][counter].scatter(x, y, zorder=1, alpha= 0.2, c=color, cmap=mpl.cm.rainbow, s=30, visible=True, picker=True)
+        arr[counter] = sct
 
     def check_click(self, label):
         i = self.labels.index(label)
         counter = 0
         ax, fig, checkbox_status = self.ax, self.fig, self.checkbox_status
 
-        if ax[i].get_visible():
-            ax[i].set_visible(False)
-            checkbox_status[i] = 0
-        else:
-            ax[i].set_visible(True)
-            checkbox_status[i] = 1
+        for y in range(len(self.data)):
+            if ax[y][i].get_visible():
+                ax[y][i].set_visible(False)
+                checkbox_status[i] = 0
+            else:
+                ax[y][i].set_visible(True)
+                checkbox_status[i] = 1
 
         if checkbox_status.count(1) > 0:
-            gs = gridspec.GridSpec(1, checkbox_status.count(1), height_ratios=[5])
+            gs = gridspec.GridSpec(len(self.data), checkbox_status.count(1))
 
-        for j in range(len(checkbox_status)):
-            if checkbox_status[j] == 1:
-                ax[j].set_position(gs[counter].get_position(fig))
-                counter += 1
-            else:
-                if checkbox_status.count(1) > 0:
-                    ax[j].set_position(gs[0].get_position(fig))
+        for y in range(len(self.data)):
+            for j in range(len(checkbox_status)):
+                if checkbox_status[j] == 1:
+                    ax[y][j].set_position(gs[y, counter].get_position(fig))
+                    counter += 1
+                else:
+                    if checkbox_status.count(1) > 0:
+                        ax[y][j].set_position(gs[y, 0].get_position(fig))
+            counter = 0
 
         plt.draw()
 
