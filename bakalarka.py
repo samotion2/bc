@@ -105,7 +105,7 @@ class Average:
 
 class Window:
     def __init__(self, files):
-        self.fig, self.ax = plt.subplots(len(files),5)
+        self.fig, self.ax = plt.subplots(len(files), 5, squeeze=False, sharex='row', sharey='row', gridspec_kw = {'wspace':0.025, 'hspace':0.05})
         fig, ax = self.fig, self.ax
         self.data = files
 
@@ -120,8 +120,6 @@ class Window:
         labels = self.labels
         axRadioButton = plt.axes([0.01,0.5,0.15,0.15]) 
         self.radiobutton = RadioButtons(axRadioButton, self.labels)
-
-        #fig.text(1, 1, 'textbox', fontsize=10)
 
         self.checkbox_status = [1,1,1,1,1]
         checkbox_status = self.checkbox_status
@@ -159,35 +157,18 @@ class Window:
         data = self.data
         ax = self.ax
         labels = self.labels
-        #print(data['LONGITUDE'][0])
 
-        # figg = make_subplots(rows=3, cols=5, shared_xaxes=True, shared_yaxes=True)
-
-        # for j in range(1,4):
-        #     for i in range(1,6):
-        #         figg.add_trace(go.Scatter(x=data['LONGITUDE']/10000000, y=data['LATITUDE']/10000000), row=j, col=i)
-
-        # figg.show()
-        
-        # for y in range(i*j):
-        #     figg.data[y].update(hovertemplate=self.annot_format(3))
-
-        #figg.update_layout(height=600, width=800, title_text="Side By Side Subplots")
-        
-        # figg = px.scatter_mapbox(data, lon=data['LONGITUDE']/10000000, lat=data['LATITUDE']/10000000, color="GSPEED", title="A Plotly Express Figure")
-        # figg.update_layout(mapbox_style="open-street-map")
-        tmp = self.bbset()
+        bb = self.bbset()
         x1 = []
         x2 = []
         y1 = []
         y2 = []
 
-        for i in range(len(tmp)):
-            x1.append(tmp[i][0])
-            x2.append(tmp[i][1])
-            y1.append(tmp[i][2])
-            y2.append(tmp[i][3])
-        #print(x1)
+        for i in range(len(bb)):
+            x1.append(bb[i][0])
+            x2.append(bb[i][1])
+            y1.append(bb[i][2])
+            y2.append(bb[i][3])
         
         #nastavenie colormapy
         color = []
@@ -205,6 +186,7 @@ class Window:
             counter = 0
 
         #self.radiobutton.on_clicked(partial(radio_click, p, data, ax, labels))
+        
         #nastavenie hranic tabulky, formatovanie osi tabulky
         for y in range(len(data)):
             for i in range(len(p[0])):
@@ -225,8 +207,8 @@ class Window:
         for y in range(len(data)):
             for i in range(5):
                 plotter[y].plot(ax[y][i])
-                #plotter.plot(ax[1][i])
 
+        self.fig.canvas.toolbar.update()
         plt.subplots_adjust(left=0.25, top= 0.95, bottom= 0.05)
         plt.draw()
 
@@ -287,7 +269,7 @@ class Window:
                 checkbox_status[i] = 1
 
         if checkbox_status.count(1) > 0:
-            gs = gridspec.GridSpec(len(self.data), checkbox_status.count(1))
+            gs = gridspec.GridSpec(len(self.data), checkbox_status.count(1), wspace=0.025, hspace=0.05)
 
         for y in range(len(self.data)):
             for j in range(len(checkbox_status)):
@@ -370,7 +352,6 @@ def radio_click(p, data, ax, labels, label):
     cbpresent = True
 
     plt.draw()
-
 
 def average_click(event):
     average = Average()
