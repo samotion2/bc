@@ -21,6 +21,8 @@ from plotly.subplots import make_subplots
 import plotly.graph_objects as go
 import plotly.express as px
 
+import json
+
 # global data1
 # cbpresent = False
 # cb = []
@@ -105,7 +107,8 @@ class Average:
 
 class Window:
     def __init__(self, files):
-        self.fig, self.ax = plt.subplots(len(files), 5, squeeze=False, sharex='row', sharey='row', gridspec_kw = {'wspace':0.025, 'hspace':0.05})
+        self.number_of_file = len(files)
+        self.fig, self.ax = plt.subplots(self.number_of_file, 5, squeeze=False, sharex='row', sharey='row', gridspec_kw = {'wspace':0.025, 'hspace':0.05})
         fig, ax = self.fig, self.ax
         self.data = files
 
@@ -141,17 +144,19 @@ class Window:
     def txt(self):
         return ("x: " + "\n" + "y: " + "\n" + "altitude: " + "\n" + "speed: " + "\n" + "crs: " + "\n" + "accuracy: ")
 
-    def hover(self, event): #mozno pridat nejaky sleep aby to nelagovalo
+    def hover(self, event):
         self.fig.canvas.toolbar.set_message(self.txt())
-        # ax = self.ax
-        # if event.inaxes in [ax[0], ax[1], ax[2], ax[3], ax[4]] and ax[0].collections: #nefunguje pre posledny 
-        #     for axx in [ax[0], ax[1], ax[2], ax[3], ax[4]]:
-        #         cont, ind = axx.collections[0].contains(event)
-        #         #print(cont, ind)
-        #         if cont and ind:
-        #             print('ano')
-        #             #self.fig.canvas.toolbar.set_message(self.annot_format(ind['ind'][0]))
-        #             #print(self.annot_format(ind['ind'][0]))
+        ax = self.ax
+        
+        for i in range(self.number_of_file):
+            if event.inaxes in [ax[i][0], ax[i][1], ax[i][2], ax[i][3], ax[i][4]] and ax[i][0].collections: 
+                for axx in [ax[i][0], ax[i][1], ax[i][2], ax[i][3], ax[i][4]]:
+                    cont, ind = axx.collections[0].contains(event)
+                    #print(cont, ind)
+                    if cont and ind:
+                        #print('ano')
+                        self.fig.canvas.toolbar.set_message(self.annot_format(ind['ind'][0], i))
+                        #print(self.annot_format(ind['ind'][0]))
 
     def generate_click(self, event):
         data = self.data
@@ -218,22 +223,22 @@ class Window:
         xdata, ydata = pnts[0,:]
         
         for z in range(len(self.data)):
-            points = [tilemapbase.project(x,y) for x,y in zip(self.data[z]['LONGITUDE']/10000000, self.data[z]['LATITUDE']/10000000)]
+            points = [tilemapbase.project(x,y) for x,y in zip(self.data[z]['LONGITUDE'], self.data[z]['LATITUDE'])]
             x, y = zip(*points)
 
             if x[0] == xdata and y[0] ==ydata:
-                print(x[0], xdata, y[0], ydata)
+                #print(x[0], xdata, y[0], ydata)
                 break
 
         print(self.annot_format(i, z))
-        self.fig.canvas.toolbar.set_message(self.annot_format(i, z)) #------------------------------------TU ZMENIT
+        self.fig.canvas.toolbar.set_message(self.annot_format(i, z))
 
     def annot_format(self, i, y):
-        return ("x: " + str(self.data[y]['LONGITUDE'][i]/10000000) + "\n" + \
-        "y: " + str(self.data[y]['LATITUDE'][i]/10000000) + "\n" + \
+        return ("x: " + str(self.data[y]['LONGITUDE'][i]) + "\n" + \
+        "y: " + str(self.data[y]['LATITUDE'][i]) + "\n" + \
         "altitude: " + str(round(self.data[y]['HMSL'][i]/1000, 2)) + "\n" + \
         "speed: " + str(round(self.data[y]['GSPEED'][i]*3.6/100, 2)) + "\n" + \
-        "crs: " + str(round(self.data[y]['CRS'][i]/100000, 2)) + "\n" + \
+        "crs: " + str(round(self.data[y]['CRS'][i], 2)) + "\n" + \
         "accuracy: " + str(round(self.data[y]['HACC'][i], 2)))
 
     def bbset(self):
@@ -241,15 +246,15 @@ class Window:
         #zistenie min a max hodnot lat,long hodnot z dat
         bb = []
         for i in range(len(data)):
-            shiftx = (data[i]['LONGITUDE'].max() - data[i]['LONGITUDE'].min())/100000000
-            shifty = (data[i]['LATITUDE'].max() - data[i]['LATITUDE'].min())/300000000
+            shiftx = (data[i]['LONGITUDE'].max() - data[i]['LONGITUDE'].min())/10
+            shifty = (data[i]['LATITUDE'].max() - data[i]['LATITUDE'].min())/10
 
-            bbox = (data[i]['LONGITUDE'].min()/10000000, data[i]['LONGITUDE'].max()/10000000, data[i]['LATITUDE'].min()/10000000, data[i]['LATITUDE'].max()/10000000)
+            bbox = (data[i]['LONGITUDE'].min(), data[i]['LONGITUDE'].max(), data[i]['LATITUDE'].min(), data[i]['LATITUDE'].max())
             bb.append((bbox[0] - shiftx, bbox[1] + shiftx, bbox[2] - shifty, bbox[3] + shifty))
         return bb
 
     def crtscatter(self, arr, color, i, counter):
-        points = [tilemapbase.project(x,y) for x,y in zip(self.data[i]['LONGITUDE']/10000000, self.data[i]['LATITUDE']/10000000)]
+        points = [tilemapbase.project(x,y) for x,y in zip(self.data[i]['LONGITUDE'], self.data[i]['LATITUDE'])]
         x, y = zip(*points)
 
         sct = self.ax[i][counter].scatter(x, y, zorder=1, alpha= 0.2, c=color, cmap=mpl.cm.rainbow, s=30, visible=True, picker=True)
@@ -297,14 +302,62 @@ def load_data():
         
         try:
             files = []
+            counter = 0
             for file in filenames:
-                files.append(pd.read_csv(file, names=['TIME','2','LATITUDE','4','LONGITUDE','6','HMSL','8','GSPEED','10','CRS','12', 'HACC'], sep=';'))
-            # data = data.sample(len(data)//10) #zmensenie vzdorky
-            # data.reset_index(drop=True, inplace=True) #reindexovanie aby fungoval index anotacii
+                #files.append(pd.read_csv(file, names=['TIME','2','LATITUDE','4','LONGITUDE','6','HMSL','8','GSPEED','10','CRS','12', 'HACC'], sep=';')) #old format
+                files.append(json_to_df(file))
+
+                files[counter] = files[counter].sample(len(files[counter])//10) #zmensenie vzdorky
+                files[counter].reset_index(drop=True, inplace=True) #reindexovanie aby fungoval index anotacii
+                counter+=1
+
             return files
         except:
-            print('zly file')
+            print('Vybrany subor alebo subory su v zlom formate')
             return
+
+def json_to_df(filename):
+    logs = []
+    print(filename)
+    for line in open(filename, 'r'):
+        logs.append(json.loads(line))
+
+    time = lat = lon = hmsl = gspeed = crs = hacc = None
+
+    #tvar noveho dataframu
+    data = {'LATITUDE':[],
+            'LONGITUDE':[],
+            'HMSL':[],
+            'GSPEED':[],
+            'CRS':[],
+            'HACC':[]}
+
+    for line in logs:
+        #rozdelenie riadkov
+        if 'lon' in line:
+            lat = line['lat']
+            lon = line['lon']
+            hmsl = line['hMSL']
+            hacc = line['hAcc']
+        elif 'speed' in line:
+            speed = line['speed']
+            crs = line['heading']
+        #ak mame vsetky data vytvorime zaznam do buduceho df
+        if lat and lon and hmsl and hacc and speed and crs:
+            data['LATITUDE'].append(lat)
+            data['LONGITUDE'].append(lon)
+            data['HMSL'].append(hmsl)
+            data['HACC'].append(hacc)
+            
+            data['GSPEED'].append(speed)
+            data['CRS'].append(crs)
+            
+            time = lat = lon = hmsl = gspeed = crs = hacc = None
+
+    #vytvorime samotny df
+    df = pd.DataFrame(data)
+    return df
+    #print(df)
 
 def hidecb():
     global cbpresent
@@ -361,4 +414,5 @@ def average_click(event):
 
 if __name__ == '__main__':
     data = load_data()
-    Window(data)
+    if data:
+        Window(data)
