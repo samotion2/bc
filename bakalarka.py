@@ -23,6 +23,7 @@ import plotly.express as px
 
 import json
 
+import seaborn as sb
 # global data1
 # cbpresent = False
 # cb = []
@@ -138,6 +139,10 @@ class Window:
         button2 = Button(axButton2, "Average")
         button2.on_clicked(average_click)
 
+        axButton3 = plt.axes([0.06,0.8,0.10,0.08]) 
+        button3 = Button(axButton3, "Correlation")
+        button3.on_clicked(self.correlation_click)
+
         plt.subplots_adjust(left=0.3)
         plt.show()
     
@@ -157,6 +162,60 @@ class Window:
                         #print('ano')
                         self.fig.canvas.toolbar.set_message(self.annot_format(ind['ind'][0], i))
                         #print(self.annot_format(ind['ind'][0]))
+
+    def correlation_click(self, event):
+        data = self.data #todo spravit average zo vsetkych teraz ide iba pre jeden!!!!!!!!!!!!!!!!!!!!!!!!!
+        print(data)
+
+        fig2, ax2 = plt.subplots(nrows=1, ncols=3) # two axes on figure
+
+        attributes = ['LONGITUDE', 'GSPEED', 'HMSL']
+        cursors = []
+
+        for i in range(len(attributes)):
+            attr = attributes[i]
+            ax2[i].scatter(data[0]['HACC'], data[0][attr])
+            ax2[i].set_title(attr)
+            cursors.append(mplcursors.cursor(ax2[i], hover=True))
+
+        cursors[0].connect("add", self.cursor_annot1)
+        cursors[1].connect("add", self.cursor_annot2)
+        cursors[2].connect("add", self.cursor_annot3)
+        
+        self.cursors = cursors
+
+        fig3, ax3 = plt.subplots()
+        corr = data[0].corr()
+        sb.heatmap(corr, cmap="Blues", annot=True)
+
+        plt.show()
+
+    def cursor_annot1(self, sel):
+        sel.annotation.set_text('HACC: {}\nLONGITUDE: {}\nindex: {}'.format(sel.target[0], sel.target[1], sel.index))
+
+        for s in self.cursors[1].selections:
+            self.cursors[1].remove_selection(s)
+
+        for s in self.cursors[2].selections:
+            self.cursors[2].remove_selection(s)
+
+    def cursor_annot2(self, sel):
+        sel.annotation.set_text('HACC: {}\nGSPEED: {}\nindex: {}'.format(sel.target[0], sel.target[1], sel.index))
+        
+        for s in self.cursors[0].selections:
+            self.cursors[0].remove_selection(s)
+
+        for s in self.cursors[2].selections:
+            self.cursors[2].remove_selection(s)
+
+    def cursor_annot3(self, sel):
+        sel.annotation.set_text('HACC: {}\nHMSL: {}\nindex: {}'.format(sel.target[0], sel.target[1], sel.index))
+        
+        for s in self.cursors[0].selections:
+            self.cursors[0].remove_selection(s)
+
+        for s in self.cursors[1].selections:
+            self.cursors[1].remove_selection(s)
 
     def generate_click(self, event):
         data = self.data
@@ -207,7 +266,7 @@ class Window:
         for i in range(len(data)):
             extent = tilemapbase.Extent.from_lonlat(x1[i],x2[i],y1[i],y2[i])
             t = tilemapbase.tiles.build_OSM()
-            plotter.append(tilemapbase.Plotter(extent, t, width=50))
+            plotter.append(tilemapbase.Plotter(extent, t, width=100))
         
         for y in range(len(data)):
             for i in range(5):
