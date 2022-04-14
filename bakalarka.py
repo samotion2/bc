@@ -47,11 +47,11 @@ class Average:
         longdif = round(data[0]['LONGITUDE'].max()/accuracy*10000000)-round(data[0]['LONGITUDE'].min()/accuracy*10000000)
         latdif = round(data[0]['LATITUDE'].max()/accuracy*10000000)-round(data[0]['LATITUDE'].min()/accuracy*10000000)
 
-        print(longdif, latdif)
+        #print(longdif, latdif)
         longmin = data[0]['LONGITUDE'].min()*10000000
         latmin = data[0]['LATITUDE'].min()*10000000
 
-        print(longmin, latmin)
+        #print(longmin, latmin)
 
         arr = [[[] for x in range(longdif) ] for j in range(latdif)]
 
@@ -59,7 +59,7 @@ class Average:
             for i in range(len(data)):
                 y = round(data['LONGITUDE'][i]*10000000/accuracy-longmin/accuracy)
                 x = round(data['LATITUDE'][i]*10000000/accuracy-latmin/accuracy)
-                print(x,y)
+                #print(x,y)
                 
                 r = Record('avg', data['LATITUDE'][i], data['LONGITUDE'][i], data['HMSL'][i], data['GSPEED'][i], data['CRS'][i], data['HACC'][i])
                 #print(r)
@@ -105,11 +105,23 @@ class Average:
         return df
 
 class Window:
-    def __init__(self, files):
+    def __init__(self, files, filenames):
+        self.filenames = filenames
         self.number_of_file = len(files)
         self.fig, self.ax = plt.subplots(self.number_of_file, 5, squeeze=False, sharex='row', sharey='row', gridspec_kw = {'wspace':0.025, 'hspace':0.05})
         fig, ax = self.fig, self.ax
         self.data = files
+
+        short_filenames = []
+        for name in filenames:
+            short_filenames.append(name.split('/')[-1])
+
+        rows = ['{}'.format(row) for row in short_filenames]
+        pad = 5
+        for axes, row in zip(ax[:,0], rows):
+            axes.annotate(row, xy=(0, 0.5), xytext=(-axes.yaxis.labelpad - pad, 0),
+            xycoords=axes.yaxis.label, textcoords='offset points',
+            size=6, ha='right', va='center', rotation=90)
 
         fig.set_figheight(7)
         fig.set_figwidth(11)
@@ -120,19 +132,23 @@ class Window:
         self.labels = ['GPS', 'Altitude', 'Speed', 'Course', 'HACC']
         labels = self.labels
 
+        axRadioButton = plt.axes([0.01,0.5,0.15,0.15]) 
+        self.radiobutton = RadioButtons(axRadioButton, list(range(1, len(filenames) + 1)))
+
         self.checkbox_status = [1,1,1,1,1]
         checkbox_status = self.checkbox_status
-        axCheckButton = plt.axes([0.01,0.3,0.15,0.2])
+        axCheckButton = plt.axes([0.01,0.2,0.15,0.2])
         checkbox = CheckButtons(ax=axCheckButton, labels=labels, actives=checkbox_status)
         checkbox.on_clicked(self.check_click)
 
-        axButton3 = plt.axes([0.03,0.6,0.11,0.1]) 
+        axButton3 = plt.axes([0.03,0.7,0.11,0.1]) 
         button3 = Button(axButton3, "Correlation")
         button3.on_clicked(self.correlation_click)
 
         self.generate_plot()
 
-        plt.subplots_adjust(left=0.22)
+        plt.subplots_adjust(left=0.3)
+        plt.get_current_fig_manager().set_window_title('Visualization')
         plt.show()
     
     def txt(self):
@@ -153,19 +169,25 @@ class Window:
                         #print(self.annot_format(ind['ind'][0]))
 
     def correlation_click(self, event):
-        data = self.data #todo spravit average zo vsetkych teraz ide iba pre jeden!!!!!!!!!!!!!!!!!!!!!!!!!
-        print(data)
+        data = self.data
+        #print(data)
+
+        index = int(self.radiobutton.value_selected)-1
 
         fig2, ax2 = plt.subplots(nrows=1, ncols=3) # two axes on figure
+        plt.get_current_fig_manager().set_window_title(index + 1)
 
         attributes = ['LONGITUDE', 'GSPEED', 'HMSL']
         cursors = []
 
         for i in range(len(attributes)):
             attr = attributes[i]
-            ax2[i].scatter(data[0]['HACC'], data[0][attr])
+            ax2[i].scatter(data[index]['HACC'], data[index][attr])
             ax2[i].set_title(attr)
             cursors.append(mplcursors.cursor(ax2[i], hover=True))
+            if i % 3 == 0:
+                ax2[i].yaxis.set_major_formatter(mpl.ticker.StrMethodFormatter('{x:,.4f}'))
+            # ax2[i].xaxis.set_major_formatter(mpl.ticker.StrMethodFormatter('{x:,.4f}'))
 
         cursors[0].connect("add", self.cursor_annot1)
         cursors[1].connect("add", self.cursor_annot2)
@@ -174,7 +196,10 @@ class Window:
         self.cursors = cursors
 
         fig3, ax3 = plt.subplots()
-        corr = data[0].corr()
+        #fig3.canvas.set_window_title('My title')
+        plt.get_current_fig_manager().set_window_title(index + 1)
+        ax3.set_title(self.filenames[index])
+        corr = data[index].corr()
         sb.heatmap(corr, cmap="Blues", annot=True)
 
         plt.show()
@@ -338,11 +363,12 @@ def load_data():
         tk.Tk().withdraw()
         filenames = askopenfilenames(title='Choose your file', filetypes=[("csvs", (".txt", ".log", "csv")), ("all", "*")])
 
+        files = []
+
         if not filenames:
             print('You have to choose a file first!')
-            return
+            return (files, filenames)
         
-        files = []
         counter = 0
         for file in filenames:     
             try:
@@ -352,7 +378,7 @@ def load_data():
 
             files[counter] = files[counter].sample(len(files[counter])//10) #zmensenie vzdorky
             files[counter].reset_index(drop=True, inplace=True) #reindexovanie aby fungoval index anotacii
-            counter+=1
+            counter += 1
             #print(files[0].head(20))
         filenames = list(filenames)
         return (files, filenames)
@@ -432,15 +458,15 @@ def init_visualize_click(plus_average):
 
     #vymaze z listu subory, ktore obsahuju chybne data
     data = [df for df in data if not df.isnull().values.any()]
-    print(data[0])
+    #print(data[0])
     if data:
         if plus_average:
             data = append_average(data)
             filenames.append('averaged')
-        print(data[0])
-        print(data[1])
-        print(data[2])
-        Window(data)
+        # print(data[0])
+        # print(data[1])
+        # print(data[2])
+        Window(data, filenames)
 
 if __name__ == '__main__':
     root = tk.Tk()
