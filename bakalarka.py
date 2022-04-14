@@ -38,34 +38,38 @@ class Record:
 class Average:
     def load_data_avg(self, accuracy, data):
         #data_path = askopenfilenames(title='Choose your file', filetypes=[("csvs", (".txt", ".log", "csv")), ("all", "*")])
-        filenames = ['C:\\Users\\PC\\Desktop\\sobota_log\\dole\\2021-04-10_08-52-05_gps.log', 'C:\\Users\\PC\\Desktop\\sobota_log\\dole\\2021-04-10_09-22-05_gps.log', 'C:\\Users\\PC\\Desktop\\sobota_log\\dole\\2021-04-10_15-06-16_gps.log']
-        print(data[0])
-        data = []
-        for i in range(len(filenames)):
-            data.append(pd.read_csv(filenames[i], names=['TIME','2','LATITUDE','4','LONGITUDE','6','HMSL','8','GSPEED','10','CRS','12', 'HACC'], sep=';'))
-        print(data[0])
-        longdif = round(data[0]['LONGITUDE'].max()/accuracy)-round(data[0]['LONGITUDE'].min()/accuracy)
-        latdif = round(data[0]['LATITUDE'].max()/accuracy)-round(data[0]['LATITUDE'].min()/accuracy)
+        # filenames = ['C:\\Users\\PC\\Desktop\\sobota_log\\dole\\2021-04-10_08-52-05_gps.log', 'C:\\Users\\PC\\Desktop\\sobota_log\\dole\\2021-04-10_09-22-05_gps.log', 'C:\\Users\\PC\\Desktop\\sobota_log\\dole\\2021-04-10_15-06-16_gps.log']
 
-        longmin = data[0]['LONGITUDE'].min()
-        latmin = data[0]['LATITUDE'].min()
+        # data = []
+        # for i in range(len(filenames)):
+        #     data.append(pd.read_csv(filenames[i], names=['TIME','2','LATITUDE','4','LONGITUDE','6','HMSL','8','GSPEED','10','CRS','12', 'HACC'], sep=';'))
+        # #print(data[0])
+        longdif = round(data[0]['LONGITUDE'].max()/accuracy*10000000)-round(data[0]['LONGITUDE'].min()/accuracy*10000000)
+        latdif = round(data[0]['LATITUDE'].max()/accuracy*10000000)-round(data[0]['LATITUDE'].min()/accuracy*10000000)
+
+        print(longdif, latdif)
+        longmin = data[0]['LONGITUDE'].min()*10000000
+        latmin = data[0]['LATITUDE'].min()*10000000
+
+        print(longmin, latmin)
 
         arr = [[[] for x in range(longdif) ] for j in range(latdif)]
 
         for data in data:
             for i in range(len(data)):
-                y = round(data['LONGITUDE'][i]/accuracy-longmin/accuracy)
-                x = round(data['LATITUDE'][i]/accuracy-latmin/accuracy)
+                y = round(data['LONGITUDE'][i]*10000000/accuracy-longmin/accuracy)
+                x = round(data['LATITUDE'][i]*10000000/accuracy-latmin/accuracy)
+                print(x,y)
                 
                 r = Record('avg', data['LATITUDE'][i], data['LONGITUDE'][i], data['HMSL'][i], data['GSPEED'][i], data['CRS'][i], data['HACC'][i])
-                print(r)
+                #print(r)
                 try:
                     arr[x-1][y-1].append(r)
                 except:
                     print('error')
                     pass
         self.arr = arr
-        print(arr)
+        #print(arr)
     
     def aver(self, rec):
         time = 'avg'
@@ -80,37 +84,23 @@ class Average:
             crs += rec[i].crs
             hacc += rec[i].hacc
 
-        lat //= arr_len
-        lon //= arr_len
-        hmsl //= arr_len
-        gspeed //= arr_len
-        crs //= arr_len
-        hacc //= arr_len
-
-        lat, lon, hmsl, gspeed, crs, hacc = (x//arr_len for x in [lat, lon, hmsl, gspeed, crs, hacc])
+        lat, lon, hmsl, gspeed, crs, hacc = (x/arr_len for x in [lat, lon, hmsl, gspeed, crs, hacc])
 
         return Record(time, lat, lon, hmsl, gspeed, crs, hacc)
 
     def get_data(self):
         arr = self.arr
-        print(arr)
-        #f = open("C:\\Users\\PC\\Desktop\\averaged.txt", "w")
+
         test = []
         for i in range(len(arr)):
             for y in range(len(arr[i])):
                 if len(arr[i][y]) != 0:
                     record = self.aver(arr[i][y])
                     test.append(record)
-                    #f.write(str(record))
 
-        #f.close()
-        
         df = pd.DataFrame([o.__dict__ for o in test])
         df = df.drop(columns=['time'])
         df.rename(columns={'lat': 'LATITUDE', 'lon': 'LONGITUDE', 'hmsl': 'HMSL', 'gspeed': 'GSPEED', 'crs': 'CRS', 'hacc': 'HACC'}, inplace=True)
-        df['LATITUDE'] = df['LATITUDE'].div(10000000)
-        df['LONGITUDE'] = df['LONGITUDE'].div(10000000)
-        df['CRS'] = df['CRS'].div(100000)
         
         return df
 
@@ -447,9 +437,9 @@ def init_visualize_click(plus_average):
         if plus_average:
             data = append_average(data)
             filenames.append('averaged')
-        # print(data[0])
-        # print(data[1])
-        # print(data[2])
+        print(data[0])
+        print(data[1])
+        print(data[2])
         Window(data)
 
 if __name__ == '__main__':
