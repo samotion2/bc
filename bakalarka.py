@@ -9,24 +9,18 @@ from matplotlib.widgets import Cursor
 from matplotlib.offsetbox import TextArea, AnnotationBbox
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import matplotlib.gridspec as gridspec
-import tkinter
+import tkinter as tk
+from tkinter import ttk
 from tkinter.filedialog import askopenfilename, askopenfilenames
-
 import mplcursors
-import tilemapbase
-tilemapbase.start_logging()
 from functools import partial
-
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
 import plotly.express as px
-
 import json
-
 import seaborn as sb
-# global data1
-# cbpresent = False
-# cb = []
+import tilemapbase
+tilemapbase.start_logging()
 
 class Record:
     def __init__(self, time, lat, lon, hmsl, gspeed, crs, hacc):
@@ -119,31 +113,22 @@ class Window:
         fig.canvas.mpl_connect('pick_event',self.map_click)
         fig.canvas.mpl_connect("motion_notify_event", self.hover)
         
-        #radiobuttons
         self.labels = ['GPS', 'Altitude', 'Speed', 'Course', 'HACC']
         labels = self.labels
-        axRadioButton = plt.axes([0.01,0.5,0.15,0.15]) 
-        self.radiobutton = RadioButtons(axRadioButton, self.labels)
 
         self.checkbox_status = [1,1,1,1,1]
         checkbox_status = self.checkbox_status
-        axCheckButton = plt.axes([0.01,0.2,0.15,0.2]) 
+        axCheckButton = plt.axes([0.01,0.3,0.15,0.2])
         checkbox = CheckButtons(ax=axCheckButton, labels=labels, actives=checkbox_status)
         checkbox.on_clicked(self.check_click)
 
-        axButton1 = plt.axes([0.01,0.7,0.10,0.08]) 
-        button1 = Button(axButton1, "Generate")
-        button1.on_clicked(self.generate_click)
-
-        axButton2 = plt.axes([0.12,0.7,0.10,0.08]) 
-        button2 = Button(axButton2, "Average")
-        button2.on_clicked(average_click)
-
-        axButton3 = plt.axes([0.06,0.8,0.10,0.08]) 
+        axButton3 = plt.axes([0.03,0.6,0.11,0.1]) 
         button3 = Button(axButton3, "Correlation")
         button3.on_clicked(self.correlation_click)
 
-        plt.subplots_adjust(left=0.3)
+        self.generate_plot()
+
+        plt.subplots_adjust(left=0.22)
         plt.show()
     
     def txt(self):
@@ -217,7 +202,7 @@ class Window:
         for s in self.cursors[1].selections:
             self.cursors[1].remove_selection(s)
 
-    def generate_click(self, event):
+    def generate_plot(self):
         data = self.data
         ax = self.ax
         labels = self.labels
@@ -248,8 +233,6 @@ class Window:
                 self.crtscatter(p[i], clr, i, counter)
                 counter += 1
             counter = 0
-
-        #self.radiobutton.on_clicked(partial(radio_click, p, data, ax, labels))
         
         #nastavenie hranic tabulky, formatovanie osi tabulky
         for y in range(len(data)):
@@ -274,7 +257,6 @@ class Window:
 
         self.fig.canvas.toolbar.update()
         plt.subplots_adjust(left=0.25, top= 0.95, bottom= 0.05)
-        plt.draw()
 
     def map_click(self, event):
         i = event.ind[0]
@@ -349,15 +331,12 @@ class Window:
 
 def load_data():
         #vyber suboru
-        tkinter.Tk().withdraw()
+        tk.Tk().withdraw()
         filenames = askopenfilenames(title='Choose your file', filetypes=[("csvs", (".txt", ".log", "csv")), ("all", "*")])
 
         if not filenames:
             print('You have to choose a file first!')
             return
-        
-        #self.radiobutton.set_active(0)
-        #hidecb()
         
         try:
             files = []
@@ -418,60 +397,33 @@ def json_to_df(filename):
     return df
     #print(df)
 
-def hidecb():
-    global cbpresent
-    global cb
-
-    if cbpresent == True:
-        cb.remove()
-        cbpresent = False
-
-def radio_click(p, data, ax, labels, label):
-    global cbpresent
-    global cb
-
-    for i in p:
-        i.set_visible(False)
-
-    i = labels.index(label)
-    p[i].set_visible(True)
-
-    hidecb()
-
-    if label == 'Speed':
-        vmin=data['GSPEED'].min()*3.6/100
-        vmax=data['GSPEED'].max()*3.6/100
-    elif label == 'HACC':
-        vmin=data['HACC'].min()
-        vmax=data['HACC'].max()
-    elif label == 'Altitude':
-        vmin=data['HMSL'].min()/1000
-        vmax=data['HMSL'].max()/1000
-    elif label == "Course":
-        vmin=data['CRS'].min()/100000
-        vmax=data['CRS'].max()/100000
-    else:
-        plt.draw()
-        return
-
-    norm = mpl.colors.Normalize(vmin=vmin, vmax=vmax)
-    cmap = mpl.cm.ScalarMappable(norm=norm, cmap=mpl.cm.rainbow)
-    
-    divider = make_axes_locatable(ax)
-    cax = divider.append_axes("right", size="5%", pad=0.05)
-    v = np.linspace(vmin, vmax, 10, endpoint=True)
-    cb = plt.colorbar(cmap, cax=cax, ticks=v)
-    cbpresent = True
-
-    plt.draw()
-
-def average_click(event):
+def init_average_click():
     average = Average()
     average.load_data_avg(300)
     average.write_data()
     print("averaged")
 
-if __name__ == '__main__':
+def init_generate_click():
     data = load_data()
     if data:
         Window(data)
+
+def placeholder():
+    print('placeholder_func')
+
+if __name__ == '__main__':
+    root = tk.Tk()
+    root.geometry('300x200')
+    root.resizable(False, False)
+    root.title('Analyzator')
+
+    # exit button
+    generate_button = ttk.Button(root, text='Generate', command=lambda: init_generate_click())
+    average_button = ttk.Button(root, text='Average', command=lambda: init_average_click())
+    old_format_button = ttk.Button(root, text='Old To New', command=lambda: placeholder())
+
+    generate_button.pack(ipadx=5, ipady=6, expand=True)
+    average_button.pack(ipadx=5, ipady=4, expand=True)
+    old_format_button.pack(ipadx=5, ipady=4, expand=True)
+
+    root.mainloop()
