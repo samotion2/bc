@@ -338,21 +338,28 @@ def load_data():
             print('You have to choose a file first!')
             return
         
-        try:
-            files = []
-            counter = 0
-            for file in filenames:
-                #files.append(pd.read_csv(file, names=['TIME','2','LATITUDE','4','LONGITUDE','6','HMSL','8','GSPEED','10','CRS','12', 'HACC'], sep=';')) #old format
+        files = []
+        counter = 0
+        for file in filenames:     
+            try:
                 files.append(json_to_df(file))
+            except:
+                files.append(old_to_df(file))
 
-                files[counter] = files[counter].sample(len(files[counter])//10) #zmensenie vzdorky
-                files[counter].reset_index(drop=True, inplace=True) #reindexovanie aby fungoval index anotacii
-                counter+=1
+            files[counter] = files[counter].sample(len(files[counter])//10) #zmensenie vzdorky
+            files[counter].reset_index(drop=True, inplace=True) #reindexovanie aby fungoval index anotacii
+            counter+=1
 
-            return files
-        except:
-            print('Vybrany subor alebo subory su v zlom formate')
-            return
+        return files
+
+def old_to_df(filename):
+    df = pd.read_csv(filename, names=['TIME','2','LATITUDE','4','LONGITUDE','6','HMSL','8','GSPEED','10','CRS','12', 'HACC'], sep=';')
+    df = df.drop(columns=['TIME', '2', '4', '6', '8', '10', '12'])
+    df['LATITUDE'] = df['LATITUDE'].div(10000000)
+    df['LONGITUDE'] = df['LONGITUDE'].div(10000000)
+    df['CRS'] = df['CRS'].div(100000)
+    #print(df)
+    return df
 
 def json_to_df(filename):
     logs = []
@@ -394,8 +401,8 @@ def json_to_df(filename):
 
     #vytvorime samotny df
     df = pd.DataFrame(data)
-    return df
     #print(df)
+    return df
 
 def init_average_click():
     average = Average()
@@ -403,8 +410,18 @@ def init_average_click():
     average.write_data()
     print("averaged")
 
-def init_generate_click():
+def init_visualize_click():
     data = load_data()
+    counter = 0
+    
+    for df in data:
+        if(df.isnull().values.any()):
+            print("Subor {} obsahuje chybne data!".format(counter))
+        counter += 1
+
+    #vymaze z listu subory, ktore obsahuju chybne data
+    data = [df for df in data if not df.isnull().values.any()]
+
     if data:
         Window(data)
 
@@ -418,12 +435,12 @@ if __name__ == '__main__':
     root.title('Analyzator')
 
     # exit button
-    generate_button = ttk.Button(root, text='Generate', command=lambda: init_generate_click())
+    visualize_button = ttk.Button(root, text='Visualize', command=lambda: init_visualize_click())
     average_button = ttk.Button(root, text='Average', command=lambda: init_average_click())
-    old_format_button = ttk.Button(root, text='Old To New', command=lambda: placeholder())
+    visualize_old_button = ttk.Button(root, text='Visualize Old', command=lambda: placeholder())
 
-    generate_button.pack(ipadx=5, ipady=6, expand=True)
+    visualize_button.pack(ipadx=5, ipady=6, expand=True)
     average_button.pack(ipadx=5, ipady=4, expand=True)
-    old_format_button.pack(ipadx=5, ipady=4, expand=True)
+    visualize_old_button.pack(ipadx=5, ipady=4, expand=True)
 
     root.mainloop()
