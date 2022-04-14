@@ -36,13 +36,14 @@ class Record:
         return str(self.time) + ';LAT;' + str(self.lat) + ';LON;' + str(self.lon) + ';HMSL;' + str(self.hmsl) + ";GSPEED;" + str(self.gspeed) + ';CRS;' + str(self.crs) + ';HACC;' + str(self.hacc) + '\n'
 
 class Average:
-    def load_data_avg(self, accuracy):
+    def load_data_avg(self, accuracy, data):
         #data_path = askopenfilenames(title='Choose your file', filetypes=[("csvs", (".txt", ".log", "csv")), ("all", "*")])
-        data_path = ['C:\\Users\\PC\\Desktop\\sobota_log\\dole\\2021-04-10_08-52-05_gps.log', 'C:\\Users\\PC\\Desktop\\sobota_log\\dole\\2021-04-10_09-22-05_gps.log', 'C:\\Users\\PC\\Desktop\\sobota_log\\dole\\2021-04-10_15-06-16_gps.log']
+        filenames = ['C:\\Users\\PC\\Desktop\\sobota_log\\dole\\2021-04-10_08-52-05_gps.log', 'C:\\Users\\PC\\Desktop\\sobota_log\\dole\\2021-04-10_09-22-05_gps.log', 'C:\\Users\\PC\\Desktop\\sobota_log\\dole\\2021-04-10_15-06-16_gps.log']
+        print(data[0])
         data = []
-        for i in range(len(data_path)):
-            data.append(pd.read_csv(data_path[i], names=['TIME','2','LATITUDE','4','LONGITUDE','6','HMSL','8','GSPEED','10','CRS','12', 'HACC'], sep=';'))
-
+        for i in range(len(filenames)):
+            data.append(pd.read_csv(filenames[i], names=['TIME','2','LATITUDE','4','LONGITUDE','6','HMSL','8','GSPEED','10','CRS','12', 'HACC'], sep=';'))
+        print(data[0])
         longdif = round(data[0]['LONGITUDE'].max()/accuracy)-round(data[0]['LONGITUDE'].min()/accuracy)
         latdif = round(data[0]['LATITUDE'].max()/accuracy)-round(data[0]['LATITUDE'].min()/accuracy)
 
@@ -56,12 +57,15 @@ class Average:
                 y = round(data['LONGITUDE'][i]/accuracy-longmin/accuracy)
                 x = round(data['LATITUDE'][i]/accuracy-latmin/accuracy)
                 
-                r = Record(data['TIME'][i], data['LATITUDE'][i], data['LONGITUDE'][i], data['HMSL'][i], data['GSPEED'][i], data['CRS'][i], data['HACC'][i])
+                r = Record('avg', data['LATITUDE'][i], data['LONGITUDE'][i], data['HMSL'][i], data['GSPEED'][i], data['CRS'][i], data['HACC'][i])
+                print(r)
                 try:
                     arr[x-1][y-1].append(r)
                 except:
+                    print('error')
                     pass
         self.arr = arr
+        print(arr)
     
     def aver(self, rec):
         time = 'avg'
@@ -87,18 +91,28 @@ class Average:
 
         return Record(time, lat, lon, hmsl, gspeed, crs, hacc)
 
-    def write_data(self):
+    def get_data(self):
         arr = self.arr
-
-        f = open("C:\\Users\\PC\\Desktop\\averaged.txt", "w")
-
+        print(arr)
+        #f = open("C:\\Users\\PC\\Desktop\\averaged.txt", "w")
+        test = []
         for i in range(len(arr)):
             for y in range(len(arr[i])):
                 if len(arr[i][y]) != 0:
                     record = self.aver(arr[i][y])
-                    f.write(str(record))
+                    test.append(record)
+                    #f.write(str(record))
 
-        f.close()
+        #f.close()
+        
+        df = pd.DataFrame([o.__dict__ for o in test])
+        df = df.drop(columns=['time'])
+        df.rename(columns={'lat': 'LATITUDE', 'lon': 'LONGITUDE', 'hmsl': 'HMSL', 'gspeed': 'GSPEED', 'crs': 'CRS', 'hacc': 'HACC'}, inplace=True)
+        df['LATITUDE'] = df['LATITUDE'].div(10000000)
+        df['LONGITUDE'] = df['LONGITUDE'].div(10000000)
+        df['CRS'] = df['CRS'].div(100000)
+        
+        return df
 
 class Window:
     def __init__(self, files):
@@ -349,11 +363,13 @@ def load_data():
             files[counter] = files[counter].sample(len(files[counter])//10) #zmensenie vzdorky
             files[counter].reset_index(drop=True, inplace=True) #reindexovanie aby fungoval index anotacii
             counter+=1
-
-        return files
+            #print(files[0].head(20))
+        filenames = list(filenames)
+        return (files, filenames)
 
 def old_to_df(filename):
     df = pd.read_csv(filename, names=['TIME','2','LATITUDE','4','LONGITUDE','6','HMSL','8','GSPEED','10','CRS','12', 'HACC'], sep=';')
+    df = df.dropna(how='all')
     df = df.drop(columns=['TIME', '2', '4', '6', '8', '10', '12'])
     df['LATITUDE'] = df['LATITUDE'].div(10000000)
     df['LONGITUDE'] = df['LONGITUDE'].div(10000000)
@@ -401,32 +417,40 @@ def json_to_df(filename):
 
     #vytvorime samotny df
     df = pd.DataFrame(data)
-    #print(df)
+    df = df.dropna(how='all')
     return df
 
-def init_average_click():
+def append_average(data_arr):
     average = Average()
-    average.load_data_avg(300)
-    average.write_data()
-    print("averaged")
+    average.load_data_avg(300, data_arr)
+    data_arr.append(average.get_data())
+    return data_arr
 
-def init_visualize_click():
-    data = load_data()
+def init_visualize_click(plus_average):
+    data, filenames = load_data()
+
     counter = 0
-    
+    # print(data[0].head(100))
+    # print(data[1].head(100))
+    if not data:
+        return
+
     for df in data:
         if(df.isnull().values.any()):
-            print("Subor {} obsahuje chybne data!".format(counter))
+            print("Subor {} obsahuje chybne data!".format(filenames[counter]))
         counter += 1
 
     #vymaze z listu subory, ktore obsahuju chybne data
     data = [df for df in data if not df.isnull().values.any()]
-
+    print(data[0])
     if data:
+        if plus_average:
+            data = append_average(data)
+            filenames.append('averaged')
+        # print(data[0])
+        # print(data[1])
+        # print(data[2])
         Window(data)
-
-def placeholder():
-    print('placeholder_func')
 
 if __name__ == '__main__':
     root = tk.Tk()
@@ -434,13 +458,10 @@ if __name__ == '__main__':
     root.resizable(False, False)
     root.title('Analyzator')
 
-    # exit button
-    visualize_button = ttk.Button(root, text='Visualize', command=lambda: init_visualize_click())
-    average_button = ttk.Button(root, text='Average', command=lambda: init_average_click())
-    visualize_old_button = ttk.Button(root, text='Visualize Old', command=lambda: placeholder())
+    visualize_button = ttk.Button(root, text='Visualize', command=lambda: init_visualize_click(False))
+    average_button = ttk.Button(root, text='Average', command=lambda: init_visualize_click(True))
 
     visualize_button.pack(ipadx=5, ipady=6, expand=True)
     average_button.pack(ipadx=5, ipady=4, expand=True)
-    visualize_old_button.pack(ipadx=5, ipady=4, expand=True)
 
     root.mainloop()
