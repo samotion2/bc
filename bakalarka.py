@@ -13,15 +13,13 @@ import tkinter as tk
 from tkinter import ttk
 from tkinter.filedialog import askopenfilename, askopenfilenames
 import mplcursors
-from functools import partial
-from plotly.subplots import make_subplots
-import plotly.graph_objects as go
-import plotly.express as px
 import json
 import seaborn as sb
 import tilemapbase
+
 tilemapbase.start_logging()
 
+#format dat zaznamov
 class Record:
     def __init__(self, time, lat, lon, hmsl, gspeed, crs, hacc):
         self.time = time
@@ -37,21 +35,12 @@ class Record:
 
 class Average:
     def load_data_avg(self, accuracy, data):
-        #data_path = askopenfilenames(title='Choose your file', filetypes=[("csvs", (".txt", ".log", "csv")), ("all", "*")])
-        # filenames = ['C:\\Users\\PC\\Desktop\\sobota_log\\dole\\2021-04-10_08-52-05_gps.log', 'C:\\Users\\PC\\Desktop\\sobota_log\\dole\\2021-04-10_09-22-05_gps.log', 'C:\\Users\\PC\\Desktop\\sobota_log\\dole\\2021-04-10_15-06-16_gps.log']
-
-        # data = []
-        # for i in range(len(filenames)):
-        #     data.append(pd.read_csv(filenames[i], names=['TIME','2','LATITUDE','4','LONGITUDE','6','HMSL','8','GSPEED','10','CRS','12', 'HACC'], sep=';'))
-        # #print(data[0])
+        #rozdiel najmensej a najvacsej suradnice
         longdif = round(data[0]['LONGITUDE'].max()/accuracy*10000000)-round(data[0]['LONGITUDE'].min()/accuracy*10000000)
         latdif = round(data[0]['LATITUDE'].max()/accuracy*10000000)-round(data[0]['LATITUDE'].min()/accuracy*10000000)
 
-        #print(longdif, latdif)
         longmin = data[0]['LONGITUDE'].min()*10000000
         latmin = data[0]['LATITUDE'].min()*10000000
-
-        #print(longmin, latmin)
 
         arr = [[[] for x in range(longdif) ] for j in range(latdif)]
 
@@ -59,10 +48,9 @@ class Average:
             for i in range(len(data)):
                 y = round(data['LONGITUDE'][i]*10000000/accuracy-longmin/accuracy)
                 x = round(data['LATITUDE'][i]*10000000/accuracy-latmin/accuracy)
-                #print(x,y)
                 
+                #vytvorenie zaznamu a ulozenie do pola
                 r = Record('avg', data['LATITUDE'][i], data['LONGITUDE'][i], data['HMSL'][i], data['GSPEED'][i], data['CRS'][i], data['HACC'][i])
-                #print(r)
                 try:
                     arr[x-1][y-1].append(r)
                 except:
@@ -71,6 +59,7 @@ class Average:
         self.arr = arr
         #print(arr)
     
+    #spriemerovanie dat jedneho vyseku
     def aver(self, rec):
         time = 'avg'
         lat = lon = hmsl = gspeed = crs = hacc = 0
@@ -88,6 +77,7 @@ class Average:
 
         return Record(time, lat, lon, hmsl, gspeed, crs, hacc)
 
+    #vytvorenie df zo spriemerovanych zaznamov
     def get_data(self):
         arr = self.arr
 
@@ -104,18 +94,23 @@ class Average:
         
         return df
 
+#classa zodpovedajuca za vytvorenie a vykreslenie nacitanych dat
 class Window:
     def __init__(self, files, filenames):
         self.filenames = filenames
         self.number_of_file = len(files)
+
+        #vytvorenie subplotov posla poctu validnych vstupnych suborov
         self.fig, self.ax = plt.subplots(self.number_of_file, 5, squeeze=False, sharex='row', sharey='row', gridspec_kw = {'wspace':0.025, 'hspace':0.05})
         fig, ax = self.fig, self.ax
         self.data = files
 
+        #odrezanie cesty suborov kvoli prehladnoti mien
         short_filenames = []
         for name in filenames:
             short_filenames.append(name.split('/')[-1])
 
+        #format mien suborov
         rows = ['{}'.format(row) for row in short_filenames]
         pad = 5
         for axes, row in zip(ax[:,0], rows):
@@ -126,14 +121,16 @@ class Window:
         fig.set_figheight(7)
         fig.set_figwidth(11)
 
+        #prepojenie listenerov na hover a click
         fig.canvas.mpl_connect('pick_event',self.map_click)
         fig.canvas.mpl_connect("motion_notify_event", self.hover)
         
+        #vytvorenie tlacidiel a ich formatovanie
         self.labels = ['GPS', 'Altitude', 'Speed', 'Course', 'HACC']
         labels = self.labels
 
         axRadioButton = plt.axes([0.01,0.5,0.15,0.15]) 
-        self.radiobutton = RadioButtons(axRadioButton, list(range(1, len(filenames) + 1)))
+        self.radiobutton = RadioButtons(axRadioButton, list(range(1, len(files) + 1)))
 
         self.checkbox_status = [1,1,1,1,1]
         checkbox_status = self.checkbox_status
@@ -145,15 +142,18 @@ class Window:
         button3 = Button(axButton3, "Correlation")
         button3.on_clicked(self.correlation_click)
 
+        #samotna generacia grafov
         self.generate_plot()
 
         plt.subplots_adjust(left=0.3)
         plt.get_current_fig_manager().set_window_title('Visualization')
         plt.show()
     
+    #format vypisu dat
     def txt(self):
         return ("x: " + "\n" + "y: " + "\n" + "altitude: " + "\n" + "speed: " + "\n" + "crs: " + "\n" + "accuracy: ")
 
+    #zobrazeni annotacie na toolbare pri akcii hover
     def hover(self, event):
         self.fig.canvas.toolbar.set_message(self.txt())
         ax = self.ax
@@ -162,19 +162,16 @@ class Window:
             if event.inaxes in [ax[i][0], ax[i][1], ax[i][2], ax[i][3], ax[i][4]] and ax[i][0].collections: 
                 for axx in [ax[i][0], ax[i][1], ax[i][2], ax[i][3], ax[i][4]]:
                     cont, ind = axx.collections[0].contains(event)
-                    #print(cont, ind)
                     if cont and ind:
-                        #print('ano')
                         self.fig.canvas.toolbar.set_message(self.annot_format(ind['ind'][0], i))
-                        #print(self.annot_format(ind['ind'][0]))
 
     def correlation_click(self, event):
         data = self.data
-        #print(data)
 
         index = int(self.radiobutton.value_selected)-1
 
-        fig2, ax2 = plt.subplots(nrows=1, ncols=3) # two axes on figure
+        #vytovrenie subplotov pre correlacie
+        fig2, ax2 = plt.subplots(nrows=1, ncols=3)
         plt.get_current_fig_manager().set_window_title(index + 1)
 
         attributes = ['LONGITUDE', 'GSPEED', 'HMSL']
@@ -187,7 +184,6 @@ class Window:
             cursors.append(mplcursors.cursor(ax2[i], hover=True))
             if i % 3 == 0:
                 ax2[i].yaxis.set_major_formatter(mpl.ticker.StrMethodFormatter('{x:,.4f}'))
-            # ax2[i].xaxis.set_major_formatter(mpl.ticker.StrMethodFormatter('{x:,.4f}'))
 
         cursors[0].connect("add", self.cursor_annot1)
         cursors[1].connect("add", self.cursor_annot2)
@@ -195,8 +191,8 @@ class Window:
         
         self.cursors = cursors
 
+        #plot dat, formatovanie
         fig3, ax3 = plt.subplots()
-        #fig3.canvas.set_window_title('My title')
         plt.get_current_fig_manager().set_window_title(index + 1)
         ax3.set_title(self.filenames[index])
         corr = data[index].corr()
@@ -204,6 +200,7 @@ class Window:
 
         plt.show()
 
+    #formatovanie hoveru pri korelacnych grafoch
     def cursor_annot1(self, sel):
         sel.annotation.set_text('HACC: {}\nLONGITUDE: {}\nindex: {}'.format(sel.target[0], sel.target[1], sel.index))
 
@@ -236,6 +233,7 @@ class Window:
         ax = self.ax
         labels = self.labels
 
+        #vytvorenie listov na uchovanie boundry box suradnic pre jednotlive vzorky
         bb = self.bbset()
         x1 = []
         x2 = []
@@ -248,17 +246,18 @@ class Window:
             y1.append(bb[i][2])
             y2.append(bb[i][3])
         
-        #nastavenie colormapy
+        #nastavenie colormapy podla typu dat
         color = []
         for i in range(len(data)):
             color.append(('Blue', data[i]['HMSL'], data[i]['GSPEED'], data[i]['CRS'], data[i]['HACC']))
 
+        #vytovrenie pola na uchovanie parsovanych dat
         p = [[0 for x in range(5)] for y in range(len(data))] 
         counter = 0
         
+        #ofarbenie bodov
         for i in range(len(color)):
             for clr in color[i]:
-                #print(i)
                 self.crtscatter(p[i], clr, i, counter)
                 counter += 1
             counter = 0
@@ -274,12 +273,14 @@ class Window:
                 ax[y][i].xaxis.set_major_formatter(mpl.ticker.StrMethodFormatter('{x:,.4f}'))
                 ax[y][i].label_outer()
         
+        #ziskanie map pomocou tilemapbase
         plotter = []
         for i in range(len(data)):
             extent = tilemapbase.Extent.from_lonlat(x1[i],x2[i],y1[i],y2[i])
             t = tilemapbase.tiles.build_OSM()
             plotter.append(tilemapbase.Plotter(extent, t, width=100))
         
+        #vykreslenie dat
         for y in range(len(data)):
             for i in range(5):
                 plotter[y].plot(ax[y][i])
@@ -287,6 +288,7 @@ class Window:
         self.fig.canvas.toolbar.update()
         plt.subplots_adjust(left=0.25, top= 0.95, bottom= 0.05)
 
+    #po kliknuti na bod sa vypisu jeho udaje
     def map_click(self, event):
         i = event.ind[0]
         pnts = event.artist.get_offsets()
@@ -297,12 +299,12 @@ class Window:
             x, y = zip(*points)
 
             if x[0] == xdata and y[0] ==ydata:
-                #print(x[0], xdata, y[0], ydata)
                 break
 
         print(self.annot_format(i, z))
         self.fig.canvas.toolbar.set_message(self.annot_format(i, z))
 
+    #format bypisu dat pri akcii hover alebo click
     def annot_format(self, i, y):
         return ("x: " + str(self.data[y]['LONGITUDE'][i]) + "\n" + \
         "y: " + str(self.data[y]['LATITUDE'][i]) + "\n" + \
@@ -311,6 +313,7 @@ class Window:
         "crs: " + str(round(self.data[y]['CRS'][i], 2)) + "\n" + \
         "accuracy: " + str(round(self.data[y]['HACC'][i], 2)))
 
+    #funkcia vrati hranicne suradnice jazdy ku, ktorej sa pripocita 1/10 rozdielu najmensej a najvacsej suradnice, kvoli lepsej prehlasdnosti na mape
     def bbset(self):
         data = self.data
         #zistenie min a max hodnot lat,long hodnot z dat
@@ -324,17 +327,21 @@ class Window:
         return bb
 
     def crtscatter(self, arr, color, i, counter):
+        #preedieme lat a long do markator pre pouzitie s tilemapbase pre ziskanie mapy
         points = [tilemapbase.project(x,y) for x,y in zip(self.data[i]['LONGITUDE'], self.data[i]['LATITUDE'])]
         x, y = zip(*points)
 
+        #priradenie bodov pre jednotlive osi
         sct = self.ax[i][counter].scatter(x, y, zorder=1, alpha= 0.2, c=color, cmap=mpl.cm.rainbow, s=30, visible=True, picker=True)
         arr[counter] = sct
 
+    #reusporiadanie subplotov pri ich vebere pomocou checkboxu
     def check_click(self, label):
         i = self.labels.index(label)
         counter = 0
         ax, fig, checkbox_status = self.ax, self.fig, self.checkbox_status
 
+        #chceknute atributy necha viditelne, unchecknute skryje
         for y in range(len(self.data)):
             if ax[y][i].get_visible():
                 ax[y][i].set_visible(False)
@@ -346,6 +353,7 @@ class Window:
         if checkbox_status.count(1) > 0:
             gs = gridspec.GridSpec(len(self.data), checkbox_status.count(1), wspace=0.025, hspace=0.05)
 
+        #zmeni velkosti na aktulanom pocte zobrazenych atributov
         for y in range(len(self.data)):
             for j in range(len(checkbox_status)):
                 if checkbox_status[j] == 1:
@@ -358,17 +366,19 @@ class Window:
 
         plt.draw()
 
-def load_data():
+def load_data(divide_sample_by):
         #vyber suboru
         tk.Tk().withdraw()
         filenames = askopenfilenames(title='Choose your file', filetypes=[("csvs", (".txt", ".log", "csv")), ("all", "*")])
 
         files = []
 
+        #kontrola ci bol vybraty subor
         if not filenames:
-            print('You have to choose a file first!')
+            print('Najprv treba vybrat subor!')
             return (files, filenames)
         
+        #zisti ci sa jedna o stary alebo novy format dat
         counter = 0
         for file in filenames:     
             try:
@@ -376,13 +386,21 @@ def load_data():
             except:
                 files.append(old_to_df(file))
 
-            files[counter] = files[counter].sample(len(files[counter])//10) #zmensenie vzdorky
-            files[counter].reset_index(drop=True, inplace=True) #reindexovanie aby fungoval index anotacii
-            counter += 1
-            #print(files[0].head(20))
+            if divide_sample_by > 1 and isinstance(divide_sample_by, int):
+                files[counter] = files[counter].sample(len(files[counter])//divide_sample_by) #zmensenie vzdorky, podla parametra divide_sample_by
+                files[counter].reset_index(drop=True, inplace=True) #reindexovanie aby fungoval index anotacii
+                counter += 1
+
+        #chybove hlasky pri nespravne zadanom divide_sample_by
+        if divide_sample_by < 1:
+            print("divide_sample_by musi byt vacsie ako 1")
+        if not isinstance(divide_sample_by, int):
+            print("divide_sample_by musi byt typu int")
+
         filenames = list(filenames)
         return (files, filenames)
 
+#parsovanie stareho formatu dat do df
 def old_to_df(filename):
     df = pd.read_csv(filename, names=['TIME','2','LATITUDE','4','LONGITUDE','6','HMSL','8','GSPEED','10','CRS','12', 'HACC'], sep=';')
     df = df.dropna(how='all')
@@ -390,9 +408,9 @@ def old_to_df(filename):
     df['LATITUDE'] = df['LATITUDE'].div(10000000)
     df['LONGITUDE'] = df['LONGITUDE'].div(10000000)
     df['CRS'] = df['CRS'].div(100000)
-    #print(df)
     return df
 
+#novy format dat typu json do df
 def json_to_df(filename):
     logs = []
     print(filename)
@@ -442,40 +460,51 @@ def append_average(data_arr):
     data_arr.append(average.get_data())
     return data_arr
 
-def init_visualize_click(plus_average):
-    data, filenames = load_data()
+#nacitanie dat po kliknuti na tlacidlo, ak bol vybrany average tak prida aj spriemerovanu trasu
+def init_visualize_click(plus_average, divide_sample_by):
+    data, filenames = load_data(divide_sample_by)
 
     counter = 0
-    # print(data[0].head(100))
-    # print(data[1].head(100))
     if not data:
         return
 
+    #ak sa vo vybranych suboroch nachadza subor s chybnymi datami subor neberieme do uvahy
     for df in data:
         if(df.isnull().values.any()):
-            print("Subor {} obsahuje chybne data!".format(filenames[counter]))
+            print("Subor {} obsahuje null hodnoty!".format(filenames[counter]))
+        if df.empty :
+            print("Subor {} obsahuje nespravny format dat!".format(filenames[counter]))
         counter += 1
 
-    #vymaze z listu subory, ktore obsahuju chybne data
+    #prejde nacitane subory a vymaze obsahujuce bull hodnoty
     data = [df for df in data if not df.isnull().values.any()]
-    #print(data[0])
+
+    #vymazeme subory s nespravnym formatom
+    data = [df for df in data if not df.empty]
+
+    #ak mame aspon jeden subor so spravnymi datami
     if data:
+        #ak sme si vybrazi moznost s averagom, pridame do dat na koniec aj average
         if plus_average:
             data = append_average(data)
             filenames.append('averaged')
-        # print(data[0])
-        # print(data[1])
-        # print(data[2])
+
+        #samotne vytvorenie okna s nacitanymi datami
         Window(data, filenames)
 
 if __name__ == '__main__':
+    #vytvorenie uvodneho okna aplikacie
     root = tk.Tk()
     root.geometry('300x200')
     root.resizable(False, False)
     root.title('Analyzator')
 
-    visualize_button = ttk.Button(root, text='Visualize', command=lambda: init_visualize_click(False))
-    average_button = ttk.Button(root, text='Average', command=lambda: init_visualize_click(True))
+    #hodnota ktorou sa bude delit pocet zaznamov v jednotlivych suboroch pouzitim df.sample()
+    divide_sample_by = 10
+
+    #tlacidla na vizualizaciu a agerage
+    visualize_button = ttk.Button(root, text='Visualize', command=lambda: init_visualize_click(False, divide_sample_by))
+    average_button = ttk.Button(root, text='Average', command=lambda: init_visualize_click(True, divide_sample_by))
 
     visualize_button.pack(ipadx=5, ipady=6, expand=True)
     average_button.pack(ipadx=5, ipady=4, expand=True)
