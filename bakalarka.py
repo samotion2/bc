@@ -203,30 +203,23 @@ class Window:
     #formatovanie hoveru pri korelacnych grafoch
     def cursor_annot1(self, sel):
         sel.annotation.set_text('HACC: {}\nLONGITUDE: {}\nindex: {}'.format(sel.target[0], sel.target[1], sel.index))
-
-        for s in self.cursors[1].selections:
-            self.cursors[1].remove_selection(s)
-
-        for s in self.cursors[2].selections:
-            self.cursors[2].remove_selection(s)
+        self.hide_cursor(1, 2)
 
     def cursor_annot2(self, sel):
         sel.annotation.set_text('HACC: {}\nGSPEED: {}\nindex: {}'.format(sel.target[0], sel.target[1], sel.index))
-        
-        for s in self.cursors[0].selections:
-            self.cursors[0].remove_selection(s)
-
-        for s in self.cursors[2].selections:
-            self.cursors[2].remove_selection(s)
+        self.hide_cursor(0, 2)
 
     def cursor_annot3(self, sel):
         sel.annotation.set_text('HACC: {}\nHMSL: {}\nindex: {}'.format(sel.target[0], sel.target[1], sel.index))
-        
-        for s in self.cursors[0].selections:
-            self.cursors[0].remove_selection(s)
+        self.hide_cursor(0, 1)
 
-        for s in self.cursors[1].selections:
-            self.cursors[1].remove_selection(s)
+    #funkcia, ktora skyje anotacie pre grafy na, ktorych prave nemame mys
+    def hide_cursor(self, cursor_number1, cursor_number2):
+        for s in self.cursors[cursor_number1].selections:
+            self.cursors[cursor_number1].remove_selection(s)
+
+        for s in self.cursors[cursor_number2].selections:
+            self.cursors[cursor_number2].remove_selection(s)
 
     def generate_plot(self):
         data = self.data
